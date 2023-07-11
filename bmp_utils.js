@@ -12,6 +12,7 @@ const DPI_200_PIX_PER_M = 7874 // количество пикселей*метр
 
 /**
 * @description получить размер пиксельного блока в байтах
+* @returns
 */
 const getPixelBytes = function(width, height, encoding = 24) {
 	let rowSize = 0
@@ -25,8 +26,15 @@ const getPixelBytes = function(width, height, encoding = 24) {
 		default: rowSize = 3 * width; break;
 	}
 	const delta = rowSize % 4
+	const rowSizeBase = rowSize
+	// Each row of BMP is padded with zeroes (to contain fixed amount of 4-byte blocks)
 	rowSize = (rowSize - delta) + (delta > 0 ? 4 : 0)
-	return rowSize * height
+
+	return {
+		pixelSize: rowSize * height,
+		rowSizeBase,
+		deltaBase: rowSize - rowSizeBase
+	}
 }
 /**
 * @description получить размер палитры в зависимости от цветового разрешения
@@ -53,7 +61,8 @@ const split2bytes = function(val) {
 * @description сформировать заголовок
 */
 const createHeader = function(width, height, encoding) {
-	const pixelSize = getPixelBytes(width, height, encoding)
+	const { pixelSize, rowSizeBase, deltaBase } = getPixelBytes(width, height, encoding)
+	console.log(rowSizeBase, deltaBase)
 	const paletteSize = getPaletteBytes(encoding)
 	const headerSize = FILE_HEADER_SIZE + IMG_HEADER_SIZE + paletteSize
 	const fileSize = headerSize + pixelSize
@@ -128,7 +137,7 @@ const createHeader = function(width, height, encoding) {
 	bytes[52] = 0
 	bytes[53] = 0
 	
-	return bytes
+	return { bytes, rowSizeBase, deltaBase }
 }
 /**
 * @description заполнить палитру
@@ -147,9 +156,10 @@ const fillPalette = function(bytes, palette) {
 /**
 * @description записать изображение в монохромном формате
 */
-const fillColorData_1 = function(bytes, clArray, paletteSize) {
+const fillColorData_1 = function(bytes, clArray, paletteSize, rowSize, delta) {
 	const pointSize = clArray.length
 	let k = FILE_HEADER_SIZE + IMG_HEADER_SIZE + paletteSize
+	let i_row = 0
 	for(let i = 0; i < pointSize; i += 8) {
 		bytes[k++] = clArray[i] +
 			(clArray[i + 1] << 1) +
@@ -159,6 +169,11 @@ const fillColorData_1 = function(bytes, clArray, paletteSize) {
 			(clArray[i + 5] << 5) +
 			(clArray[i + 6] << 6) +
 			(clArray[i + 7] << 7)
+
+		if(++i_row === rowSize) {
+			k += delta
+			i_row = 0
+		}
 	}
 }
 /**
@@ -208,13 +223,13 @@ const fillColorData_24 = function(clArray) {
 * @description сохранить цветовую карту в байтовый массив формата BMP
 */
 const saveAsBMP = async function(clArray, width, height, encoding, name, palette) {
-	const bytes = createHeader(width, height, encoding)
+	const {bytes, rowSizeBase, deltaBase} = createHeader(width, height, encoding)
 	const paletteSize = palette.length * PALETTE_BYTE_SIZE
 	
 	if(paletteSize > 0) fillPalette(bytes, palette)
 	
 	switch(encoding) {
-		case 1: fillColorData_1(bytes, clArray, paletteSize); break;
+		case 1: fillColorData_1(bytes, clArray, paletteSize, rowSizeBase, deltaBase); break;
 		case 4: fillColorData_4(bytes, clArray, paletteSize); break;
 		case 8: fillColorData_8(bytes, clArray, paletteSize); break;
 		case 16: fillColorData_16(bytes, clArray); break;
