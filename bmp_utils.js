@@ -179,11 +179,17 @@ const fillColorData_1 = function(bytes, clArray, paletteSize, rowSize, delta) {
 /**
 * @description записать изображение в 4-бит формате
 */
-const fillColorData_4 = function(bytes, clArray, paletteSize) {
+const fillColorData_4 = function(bytes, clArray, paletteSize, rowSize, delta) {
 	let k = FILE_HEADER_SIZE + IMG_HEADER_SIZE + paletteSize
+	let i_row = 0
 	const pointSize = clArray.length
-	for(let i = 0; i < pointSize; i+= 4) {
-		bytes[k++] = clArray[i] | (clArray[i + 1] << 4)
+	for(let i = 0; i < pointSize; i+= 2) {
+		bytes[k++] = clArray[i + 1] | (clArray[i] << 4)
+		
+		if(++i_row === rowSize) {
+			k += delta
+			i_row = 0
+		}
 	}
 }
 /**
@@ -230,15 +236,13 @@ const saveAsBMP = async function(clArray, width, height, encoding, name, palette
 	
 	switch(encoding) {
 		case 1: fillColorData_1(bytes, clArray, paletteSize, rowSizeBase, deltaBase); break;
-		case 4: fillColorData_4(bytes, clArray, paletteSize); break;
+		case 4: fillColorData_4(bytes, clArray, paletteSize, rowSizeBase, deltaBase); break;
 		case 8: fillColorData_8(bytes, clArray, paletteSize); break;
 		case 16: fillColorData_16(bytes, clArray); break;
 		case 24:
 		default: fillColorData_24(bytes, clArray); break;
 	}
-	for(let i = 0; i < bytes.length; i++) {
-		console.log(`i: ${i}\t${bytes[i]}`)
-	}
+
 	try {
 		await writeFile(name, bytes)
 		return 0
