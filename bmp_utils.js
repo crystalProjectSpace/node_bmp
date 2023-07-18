@@ -8,6 +8,9 @@ const _B = 66				// код символа "B" в ASCII
 const _M = 77				// код символа "M" в ASCII
 const PALETTE_BYTE_SIZE = 4 // количество байтов в одном элементе палитры (R + G + B + резервное значение, заполняемое нулями)
 
+const PIX_1BIT = 8 // количество пикселей в одном байте для монохромного варианта
+const PIX_4BIT = 2 // количество пикселей в одном байте для 4-битного варианта
+
 const DPI_200_PIX_PER_M = 7874 // количество пикселей*метр при разрешении 200dpi
 
 /**
@@ -62,7 +65,6 @@ const split2bytes = function(val) {
 */
 const createHeader = function(width, height, encoding) {
 	const { pixelSize, rowSizeBase, deltaBase } = getPixelBytes(width, height, encoding)
-	console.log(rowSizeBase, deltaBase)
 	const paletteSize = getPaletteBytes(encoding)
 	const headerSize = FILE_HEADER_SIZE + IMG_HEADER_SIZE + paletteSize
 	const fileSize = headerSize + pixelSize
@@ -154,25 +156,32 @@ const fillPalette = function(bytes, palette) {
 	}
 }
 /**
+ * @warning строки в BMP идут снизу вверх, порядок записи должен быть обращен
+ */
+/**
 * @description записать изображение в монохромном формате
 */
 const fillColorData_1 = function(bytes, clArray, paletteSize, rowSize, delta) {
 	const pointSize = clArray.length
 	let k = FILE_HEADER_SIZE + IMG_HEADER_SIZE + paletteSize
 	let i_row = 0
+	const deltaRow = rowSize * PIX_1BIT
+	let i0 = pointSize - deltaRow
 	for(let i = 0; i < pointSize; i += 8) {
-		bytes[k++] = clArray[i] +
-			(clArray[i + 1] << 1) +
-			(clArray[i + 2] << 2) + 
-			(clArray[i + 3] << 3) + 
-			(clArray[i + 4] << 4) +
-			(clArray[i + 5] << 5) +
-			(clArray[i + 6] << 6) +
-			(clArray[i + 7] << 7)
+		const i_active = (i_row << 3) + i0
+		bytes[k++] = clArray[i_active + 7] +
+			(clArray[i_active + 6] << 1) +
+			(clArray[i_active + 5] << 2) + 
+			(clArray[i_active + 4] << 3) + 
+			(clArray[i_active + 3] << 4) +
+			(clArray[i_active + 2] << 5) +
+			(clArray[i_active + 1] << 6) +
+			(clArray[i_active] << 7)
 
 		if(++i_row === rowSize) {
 			k += delta
 			i_row = 0
+			i0 -= deltaRow
 		}
 	}
 }
@@ -183,12 +192,15 @@ const fillColorData_4 = function(bytes, clArray, paletteSize, rowSize, delta) {
 	let k = FILE_HEADER_SIZE + IMG_HEADER_SIZE + paletteSize
 	let i_row = 0
 	const pointSize = clArray.length
+	const deltaRow = rowSize * PIX_4BIT
+	let i0 = pointSize - deltaRow
 	for(let i = 0; i < pointSize; i+= 2) {
-		bytes[k++] = clArray[i + 1] | (clArray[i] << 4)
-		
+		const i_active = (i_row << 1) + i0
+		bytes[k++] = clArray[i_active + 1] | (clArray[i_active] << 4)
 		if(++i_row === rowSize) {
 			k += delta
 			i_row = 0
+			i0 -= deltaRow
 		}
 	}
 }
