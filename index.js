@@ -2,9 +2,41 @@
 
 const { saveAsBMP } = require('./bmp_utils.js')
 
+const _16BIT_delta = 128
 
 const ACTIVE_CL = { R: 0, G: 100, B: 255 }
 const BG_CL = { R: 0, G: 100, B: 25 }
+
+const generatePalette16 = function(start, middle, end) {
+	const [R0, G0, B0] = start
+	const [R1, G1, B1] = middle
+	const [R2, G2, B2] = end
+	const dR_start = (R1 - R0) / _16BIT_delta
+	const dG_start = (G1 - G0) / _16BIT_delta
+	const dB_start = (B1 - B0) / _16BIT_delta
+
+	const dR_end = (R2 - R1) / _16BIT_delta
+	const dG_end = (G2 - G1) / _16BIT_delta
+	const dB_end = (B2 - B1) / _16BIT_delta
+
+	const res = new Array(256)
+	let i = 0
+	for(i = 0; i < _16BIT_delta; i++) {
+		res[i] = {
+			R: Math.floor(R0 + i * dR_start),
+			G: Math.floor(G0 + i * dG_start),
+			B: Math.floor(B0 + i * dB_start),
+		}
+		res[_16BIT_delta + i] = {
+			R: Math.floor(R1 + i * dR_end),
+			G: Math.floor(G1 + i * dG_end),
+			B: Math.floor(B1 + i * dB_end),
+		}
+	}
+
+	return res
+}
+
 const testPalette = [BG_CL, ACTIVE_CL]
 
 const testPalette_8bit = [
@@ -25,6 +57,19 @@ const testPalette_8bit = [
 	{ R: 0, G: 0, B: 0 },
 	{ R: 0, G: 0, B: 0 }
 ]
+
+const testPalette_16bit = generatePalette16([255, 0, 0], [0, 255, 0], [0, 0, 255])
+
+const generateTest_16bitImg = function(width, height) {
+	const size = width * height
+	const res = new Uint8Array(size)
+
+	for(let i = 0; i < size; i++) {
+		res[i] = Math.floor( i / size * 255)
+	}
+
+	return res
+}
 
 const testPoints = [
 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -52,8 +97,13 @@ const testPoints_8 = [
 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7,
 ];
 
+const testPoints_16 = generateTest_16bitImg(40, 40);
+
 (async function(){
-	const res = await saveAsBMP(testPoints, 40, 5, 1, 'test.bmp', testPalette)
-	const res = await saveAsBMP(testPoints_8, 40, 15, 4, 'test_8.bmp', testPalette_8bit)
-	console.log(res)
+	const res = Promise.all([
+		saveAsBMP(testPoints, 40, 5, 1, 'test.bmp', testPalette),
+		saveAsBMP(testPoints_8, 40, 15, 4, 'test_8.bmp', testPalette_8bit),
+		saveAsBMP(testPoints_16, 40, 40, 8, 'test_16.bmp', testPalette_16bit)
+	])
+	const imgSave = await res;
 })()

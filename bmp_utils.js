@@ -147,7 +147,7 @@ const createHeader = function(width, height, encoding) {
 const fillPalette = function(bytes, palette) {
 	const paletteSize = palette.length 
 	let k = FILE_HEADER_SIZE + IMG_HEADER_SIZE
-	
+
 	for(let i = 0; i < paletteSize; i++) {
 		bytes[k++] = palette[i].R
 		bytes[k++] = palette[i].G
@@ -207,11 +207,18 @@ const fillColorData_4 = function(bytes, clArray, paletteSize, rowSize, delta) {
 /**
 * @description записать изображение в 8-бит формате
 */
-const fillColorData_8 = function(bytes, clArray, paletteSize) {
+const fillColorData_8 = function(bytes, clArray, paletteSize, rowSize, delta) {
 	const pointSize = clArray.length
-	const i0 = FILE_HEADER_SIZE + IMG_HEADER_SIZE + paletteSize
+	let i_row = 0
+	let i_active = pointSize - rowSize
+	let k = FILE_HEADER_SIZE + IMG_HEADER_SIZE + paletteSize
 	for(let i = 0; i < pointSize; i++) {
-		bytes[i0 + i] = clArray
+		bytes[k++] = clArray[i_active + i_row]
+		if(++i_row === rowSize) {
+			k += delta
+			i_row = 0
+			i_active -= rowSize
+		}		
 	}
 }
 /**
@@ -249,7 +256,7 @@ const saveAsBMP = async function(clArray, width, height, encoding, name, palette
 	switch(encoding) {
 		case 1: fillColorData_1(bytes, clArray, paletteSize, rowSizeBase, deltaBase); break;
 		case 4: fillColorData_4(bytes, clArray, paletteSize, rowSizeBase, deltaBase); break;
-		case 8: fillColorData_8(bytes, clArray, paletteSize); break;
+		case 8: fillColorData_8(bytes, clArray, paletteSize, rowSizeBase, deltaBase); break;
 		case 16: fillColorData_16(bytes, clArray); break;
 		case 24:
 		default: fillColorData_24(bytes, clArray); break;
